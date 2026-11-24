@@ -3,10 +3,15 @@ name: Tweaks
 on:
   workflow_call:
     inputs:
-      youpro:
+      main_tweak:
+        description: "Main tweak built with Theos here: ytkace, youmod, or empty"
+        type: string
+        required: false
+        default: ''
+      iamyoutube:
         type: boolean
         required: false
-        default: false
+        default: true
       isponsorblock:
         type: boolean
         required: false
@@ -97,16 +102,6 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v7
 
-      - name: Install Dependencies
-        run: |
-          brew uninstall --ignore-dependencies bicep || true
-          brew untap aws/tap azure/bicep || true
-          brew install --quiet make ldid dpkg
-
-      - name: Set PATH Environment Variables
-        run: |
-          echo "$(brew --prefix make)/libexec/gnubin" >> "$GITHUB_PATH"
-
       - name: Get Commit Hashes
         id: commit_hashes
         uses: ./.github/actions/get-commit-hashes
@@ -119,58 +114,13 @@ jobs:
           nativeshare: ${{ inputs.nativeshare }}
           pleasedontstopthemusic: ${{ inputs.pleasedontstopthemusic }}
 
-      - name: Cache Theos
-        uses: ./.github/actions/cache-theos
-        with:
-          sdk_version: ${{ env.SDK_VERSION }}
-
-      - name: Install tbd
-        run: |
-          download() {
-            rm -f "$2"
-            if wget --quiet --no-verbose --tries=3 --waitretry=2 -O "$2" "$1"; then
-              return 0
-            fi
-            echo "::warning::wget failed for $2, retrying with curl"
-            rm -f "$2"
-            curl --fail --location --silent --show-error --retry 3 --retry-delay 2 -o "$2" "$1"
-          }
-          download "https://github.com/inoahdev/tbd/releases/download/2.2/tbd-mac" /usr/local/bin/tbd
-          chmod +x /usr/local/bin/tbd
-
-      - name: Clone Open in YouTube (Safari Extension)
-        if: inputs.opensafari == true
-        run: |
-          git clone --quiet -n --depth=1 --filter=tree:0 https://github.com/BillyCurtis/OpenYouTubeSafariExtension.git
-          cd OpenYouTubeSafariExtension
-          git sparse-checkout set --no-cone OpenYouTubeSafariExtension.appex
-          git checkout
-          mv *.appex ${{ github.workspace }}
-
-      - name: Clone YouTubeHeader
-        env:
-          DEMC: ${{ inputs.demc }}
-        run: |
-          rm -rf "$THEOS/include/YouTubeHeader"
-          git clone --quiet --depth=1 https://github.com/PoomSmart/YouTubeHeader.git "$THEOS/include/YouTubeHeader"
-          if [ "$DEMC" = "true" ]; then
-            rm -rf "$THEOS/include/YTHeaders"
-            cp -r "$THEOS/include/YouTubeHeader" "$THEOS/include/YTHeaders"
-          fi
-
-      - name: Clone PSHeader
-        run: |
-          rm -rf $THEOS/include/PSHeader
-          git clone --quiet --depth=1 https://github.com/PoomSmart/PSHeader.git $THEOS/include/PSHeader
-
-      - name: Clone YTVideoOverlay
-        run: git clone --quiet --depth=1 https://github.com/PoomSmart/YTVideoOverlay.git
-
       - name: Cache Tweaks
         id: cache_tweaks
         uses: ./.github/actions/cache-tweaks
         with:
           sdk_version: ${{ env.SDK_VERSION }}
+          deps: ${{ steps.commit_hashes.outputs.deps }}
+          iamyoutube: ${{ inputs.iamyoutube }}
           isponsorblock: ${{ inputs.isponsorblock }}
           demc: ${{ inputs.demc }}
           ytlowcontrastmode: ${{ inputs.ytlowcontrastmode }}
@@ -212,19 +162,132 @@ jobs:
           youfixplaybackissues_commit: ${{ steps.commit_hashes.outputs.youfixplaybackissues }}
           pleasedontstopthemusic_commit: ${{ steps.commit_hashes.outputs.pleasedontstopthemusic }}
 
+      # Skip brew/Theos/SDK/header setup entirely when every needed .deb came from cache.
+      - name: Check What Needs Building
+        id: need
+        env:
+          MAIN_TWEAK: ${{ inputs.main_tweak }}
+          T_IAMYOUTUBE: ${{ inputs.iamyoutube }}
+          T_YOUPIP: ${{ inputs.youpip }}
+          T_YTUHD: ${{ inputs.ytuhd }}
+          T_RYD: ${{ inputs.ryd }}
+          T_YTABCONFIG: ${{ inputs.ytabconfig }}
+          T_YOUQUALITY: ${{ inputs.youquality }}
+          T_YOUSPEED: ${{ inputs.youspeed }}
+          T_YOUMUTE: ${{ inputs.youmute }}
+          T_YOULOOP: ${{ inputs.youloop }}
+          T_YOUCHOOSE: ${{ inputs.youchoose }}
+          T_YTWEAKS: ${{ inputs.ytweaks }}
+          T_YOUGETCAPTION: ${{ inputs.yougetcaption }}
+          T_DEMC: ${{ inputs.demc }}
+          T_YTLOWCONTRASTMODE: ${{ inputs.ytlowcontrastmode }}
+          T_ISPONSORBLOCK: ${{ inputs.isponsorblock }}
+          T_YTHOLD: ${{ inputs.ythold }}
+          T_VOLUMEBOOST: ${{ inputs.volumeboost }}
+          T_NATIVESHARE: ${{ inputs.nativeshare }}
+          T_PDSTM: ${{ inputs.pleasedontstopthemusic }}
+        run: |
+          need=false
+          chk() { if [ "$1" = "true" ] && [ ! -f "$2" ]; then echo "needs build: $2"; need=true; fi; }
+          chk true ytvo.deb
+          chk true ygs.deb
+          chk true youfixplaybackissues.deb
+          chk "$T_IAMYOUTUBE" imyt.deb
+          chk "$T_YOUPIP" youpip.deb
+          chk "$T_YTUHD" ytuhd.deb
+          chk "$T_RYD" ryd.deb
+          chk "$T_YTABCONFIG" ytabconfig.deb
+          chk "$T_YOUQUALITY" youquality.deb
+          chk "$T_YOUSPEED" youspeed.deb
+          chk "$T_YOUMUTE" ym.deb
+          chk "$T_YOULOOP" youloop.deb
+          chk "$T_YOUCHOOSE" youchoose.deb
+          chk "$T_YTWEAKS" ytweaks.deb
+          chk "$T_YOUGETCAPTION" ygc.deb
+          chk "$T_DEMC" demc.deb
+          chk "$T_YTLOWCONTRASTMODE" ytlowcontrastmode.deb
+          chk "$T_ISPONSORBLOCK" isponsorblock.deb
+          chk "$T_YTHOLD" ythold.deb
+          chk "$T_VOLUMEBOOST" volumeboost.deb
+          chk "$T_NATIVESHARE" nativeshare.deb
+          chk "$T_PDSTM" pleasedontstopthemusic.deb
+          if [ -n "$MAIN_TWEAK" ]; then echo "needs build: $MAIN_TWEAK"; need=true; fi
+          echo "theos=$need" >> "$GITHUB_OUTPUT"
+
+      - name: Install Dependencies
+        if: steps.need.outputs.theos == 'true'
+        run: |
+          brew uninstall --ignore-dependencies bicep || true
+          brew untap aws/tap azure/bicep || true
+          brew install --quiet make ldid dpkg
+          echo "$(brew --prefix make)/libexec/gnubin" >> "$GITHUB_PATH"
+
+      - name: Cache Theos
+        if: steps.need.outputs.theos == 'true'
+        uses: ./.github/actions/cache-theos
+        with:
+          sdk_version: ${{ env.SDK_VERSION }}
+
+      - name: Install tbd
+        if: steps.need.outputs.theos == 'true'
+        run: |
+          download() {
+            rm -f "$2"
+            if wget --quiet --no-verbose --tries=3 --waitretry=2 -O "$2" "$1"; then
+              return 0
+            fi
+            echo "::warning::wget failed for $2, retrying with curl"
+            rm -f "$2"
+            curl --fail --location --silent --show-error --retry 3 --retry-delay 2 -o "$2" "$1"
+          }
+          download "https://github.com/inoahdev/tbd/releases/download/2.2/tbd-mac" /usr/local/bin/tbd
+          chmod +x /usr/local/bin/tbd
+
+      - name: Clone Headers and YTVideoOverlay
+        if: steps.need.outputs.theos == 'true'
+        env:
+          DEMC: ${{ inputs.demc }}
+        run: |
+          rm -rf "$THEOS/include/YouTubeHeader" "$THEOS/include/PSHeader"
+          git clone --quiet --depth=1 https://github.com/PoomSmart/YouTubeHeader.git "$THEOS/include/YouTubeHeader"
+          git clone --quiet --depth=1 https://github.com/PoomSmart/PSHeader.git "$THEOS/include/PSHeader"
+          if [ "$DEMC" = "true" ]; then
+            rm -rf "$THEOS/include/YTHeaders"
+            cp -r "$THEOS/include/YouTubeHeader" "$THEOS/include/YTHeaders"
+          fi
+          # YouQuality/YouSpeed/YouMute/YouLoop import ../YTVideoOverlay, so clone it even when ytvo.deb is cached
+          git clone --quiet --depth=1 https://github.com/PoomSmart/YTVideoOverlay.git
+
+      - name: Clone Open in YouTube (Safari Extension)
+        if: inputs.opensafari == true
+        run: |
+          git clone --quiet -n --depth=1 --filter=tree:0 https://github.com/BillyCurtis/OpenYouTubeSafariExtension.git
+          cd OpenYouTubeSafariExtension
+          git sparse-checkout set --no-cone OpenYouTubeSafariExtension.appex
+          git checkout
+          mv *.appex ${{ github.workspace }}
+
       - name: Build YTVideoOverlay
         if: steps.cache_tweaks.outputs.cache_ytvo_hit != 'true'
         run: |
           cd YTVideoOverlay && make clean package DEBUG=0 FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless
           mv packages/*.deb ${{ github.workspace }}/ytvo.deb
 
-      - name: Clone and Build YouPro
-        if: inputs.youpro == true
+      - name: Clone and Build YTKACE
+        if: inputs.main_tweak == 'ytkace'
         run: |
-          git clone --quiet --depth=1 https://github.com/mrdrvt99/YouPro.git
-          cd YouPro
-          chmod -R 755 .
-          dpkg-deb --root-owner-group -Zgzip --build . ../YouPro.deb
+          git clone --quiet --depth=1 https://github.com/itzzace/ytkace.git
+          cd ytkace && make clean package DEBUG=0 FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless
+          mv packages/*.deb ${{ github.workspace }}/ytkace.deb
+
+      - name: Clone and Build YouMod
+        if: inputs.main_tweak == 'youmod'
+        run: |
+          git clone --quiet --depth=1 https://github.com/tonwalter888/youmod.git
+          cd youmod
+          find Files -type f \( -name "*.h" -o -name "*.x" -o -name "*.m" \) -exec perl -pi -e 's/#import <roothide\.h>/#import <rootless.h>\n#define jbroot(path) ROOT_PATH_NS(path)/g' {} +
+          make clean package DEBUG=0 FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless
+          mv packages/*.deb ${{ github.workspace }}/youmod.deb
 
       - name: Clone and Build YouPiP
         if: inputs.youpip == true && steps.cache_tweaks.outputs.cache_youpip_hit != 'true'
@@ -311,7 +374,7 @@ jobs:
           mv packages/*.deb ${{ github.workspace }}/ygc.deb
 
       - name: Clone and Build IAmYouTube
-        if: steps.cache_tweaks.outputs.cache_iamyoutube_hit != 'true'
+        if: inputs.iamyoutube == true && steps.cache_tweaks.outputs.cache_iamyoutube_hit != 'true'
         run: |
           git clone --quiet --depth=1 https://github.com/PoomSmart/IAmYouTube.git
           cd IAmYouTube && make clean package DEBUG=0 FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless

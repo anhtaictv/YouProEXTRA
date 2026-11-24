@@ -4,6 +4,13 @@ description: Caches built .deb files per tweak, keyed on commit hash + SDK versi
 inputs:
   sdk_version:
     required: true
+  deps:
+    description: YouTubeHeader+PSHeader commits (from get-commit-hashes)
+    required: false
+    default: ''
+  iamyoutube:
+    required: false
+    default: 'true'
   youpip:
     required: false
     default: 'true'
@@ -172,151 +179,151 @@ runs:
       id: cache_youpip
       with:
         path: ${{ github.workspace }}/youpip.deb
-        key: youpip-${{ inputs.youpip_commit }}-sdk${{ inputs.sdk_version }}
+        key: youpip-${{ inputs.youpip_commit }}-sdk${{ inputs.sdk_version }}-${{ inputs.deps }}
 
     - uses: actions/cache@v6
       if: inputs.ytuhd == 'true' && inputs.ytuhd_commit != ''
       id: cache_ytuhd
       with:
         path: ${{ github.workspace }}/ytuhd.deb
-        key: ytuhd-${{ inputs.ytuhd_commit }}-sdk${{ inputs.sdk_version }}
+        key: ytuhd-${{ inputs.ytuhd_commit }}-sdk${{ inputs.sdk_version }}-${{ inputs.deps }}
 
     - uses: actions/cache@v6
       if: inputs.ryd == 'true' && inputs.ryd_commit != ''
       id: cache_ryd
       with:
         path: ${{ github.workspace }}/ryd.deb
-        key: ryd-${{ inputs.ryd_commit }}-sdk${{ inputs.sdk_version }}
+        key: ryd-${{ inputs.ryd_commit }}-sdk${{ inputs.sdk_version }}-${{ inputs.deps }}
 
     - uses: actions/cache@v6
       if: inputs.ygs_commit != ''
       id: cache_ygs
       with:
         path: ${{ github.workspace }}/ygs.deb
-        key: ygs-${{ inputs.ygs_commit }}-sdk${{ inputs.sdk_version }}
+        key: ygs-${{ inputs.ygs_commit }}-sdk${{ inputs.sdk_version }}-${{ inputs.deps }}
 
     - uses: actions/cache@v6
       if: inputs.ytabconfig == 'true' && inputs.ytabconfig_commit != ''
       id: cache_ytabconfig
       with:
         path: ${{ github.workspace }}/ytabconfig.deb
-        key: ytabconfig-${{ inputs.ytabconfig_commit }}-sdk${{ inputs.sdk_version }}
+        key: ytabconfig-${{ inputs.ytabconfig_commit }}-sdk${{ inputs.sdk_version }}-${{ inputs.deps }}
 
     - uses: actions/cache@v6
       if: inputs.youquality == 'true' && inputs.youquality_commit != ''
       id: cache_youquality
       with:
         path: ${{ github.workspace }}/youquality.deb
-        key: youquality-${{ inputs.youquality_commit }}-sdk${{ inputs.sdk_version }}
+        key: youquality-${{ inputs.youquality_commit }}-sdk${{ inputs.sdk_version }}-${{ inputs.deps }}
 
     - uses: actions/cache@v6
       if: inputs.ytvo_commit != ''
       id: cache_ytvo
       with:
         path: ${{ github.workspace }}/ytvo.deb
-        key: ytvo-${{ inputs.ytvo_commit }}-sdk${{ inputs.sdk_version }}
+        key: ytvo-${{ inputs.ytvo_commit }}-sdk${{ inputs.sdk_version }}-${{ inputs.deps }}
 
     - uses: actions/cache@v6
       if: inputs.youspeed == 'true' && inputs.youspeed_commit != ''
       id: cache_youspeed
       with:
         path: ${{ github.workspace }}/youspeed.deb
-        key: youspeed-${{ inputs.youspeed_commit }}-sdk${{ inputs.sdk_version }}
+        key: youspeed-${{ inputs.youspeed_commit }}-sdk${{ inputs.sdk_version }}-${{ inputs.deps }}
 
     - uses: actions/cache@v6
       if: inputs.youmute == 'true' && inputs.youmute_commit != ''
       id: cache_youmute
       with:
         path: ${{ github.workspace }}/ym.deb
-        key: youmute-${{ inputs.youmute_commit }}-sdk${{ inputs.sdk_version }}
+        key: youmute-${{ inputs.youmute_commit }}-sdk${{ inputs.sdk_version }}-${{ inputs.deps }}
 
     - uses: actions/cache@v6
       if: inputs.youloop == 'true' && inputs.youloop_commit != ''
       id: cache_youloop
       with:
         path: ${{ github.workspace }}/youloop.deb
-        key: youloop-${{ inputs.youloop_commit }}-sdk${{ inputs.sdk_version }}
+        key: youloop-${{ inputs.youloop_commit }}-sdk${{ inputs.sdk_version }}-${{ inputs.deps }}
 
     - uses: actions/cache@v6
       if: inputs.youchoose == 'true' && inputs.youchoose_commit != ''
       id: cache_youchoose
       with:
         path: ${{ github.workspace }}/youchoose.deb
-        key: youchoose-${{ inputs.youchoose_commit }}-sdk${{ inputs.sdk_version }}
+        key: youchoose-${{ inputs.youchoose_commit }}-sdk${{ inputs.sdk_version }}-${{ inputs.deps }}
 
     - uses: actions/cache@v6
       if: inputs.ytweaks == 'true' && inputs.ytweaks_commit != ''
       id: cache_ytweaks
       with:
         path: ${{ github.workspace }}/ytweaks.deb
-        key: ytweaks-${{ inputs.ytweaks_commit }}-sdk${{ inputs.sdk_version }}
+        key: ytweaks-${{ inputs.ytweaks_commit }}-sdk${{ inputs.sdk_version }}-${{ inputs.deps }}
 
     - uses: actions/cache@v6
       if: inputs.yougetcaption == 'true' && inputs.yougetcaption_commit != ''
       id: cache_yougetcaption
       with:
         path: ${{ github.workspace }}/ygc.deb
-        key: yougetcaption-${{ inputs.yougetcaption_commit }}-sdk${{ inputs.sdk_version }}
+        key: yougetcaption-${{ inputs.yougetcaption_commit }}-sdk${{ inputs.sdk_version }}-${{ inputs.deps }}
 
     - uses: actions/cache@v6
-      if: inputs.iamyoutube_commit != ''
+      if: inputs.iamyoutube == 'true' && inputs.iamyoutube_commit != ''
       id: cache_iamyoutube
       with:
         path: ${{ github.workspace }}/imyt.deb
-        key: iamyoutube-${{ inputs.iamyoutube_commit }}-sdk${{ inputs.sdk_version }}
+        key: iamyoutube-${{ inputs.iamyoutube_commit }}-sdk${{ inputs.sdk_version }}-${{ inputs.deps }}
 
     - uses: actions/cache@v6
       if: inputs.isponsorblock == 'true' && inputs.isponsorblock_commit != ''
       id: cache_isponsorblock
       with:
         path: ${{ github.workspace }}/isponsorblock.deb
-        key: isponsorblock-${{ inputs.isponsorblock_commit }}-sdk${{ inputs.sdk_version }}
+        key: isponsorblock-${{ inputs.isponsorblock_commit }}-sdk${{ inputs.sdk_version }}-${{ inputs.deps }}
 
     - uses: actions/cache@v6
       if: inputs.demc == 'true' && inputs.demc_commit != ''
       id: cache_demc
       with:
         path: ${{ github.workspace }}/demc.deb
-        key: demc-${{ inputs.demc_commit }}-sdk${{ inputs.sdk_version }}
+        key: demc-${{ inputs.demc_commit }}-sdk${{ inputs.sdk_version }}-${{ inputs.deps }}
 
     - uses: actions/cache@v6
       if: inputs.ytlowcontrastmode == 'true' && inputs.ytlowcontrastmode_commit != ''
       id: cache_ytlowcontrastmode
       with:
         path: ${{ github.workspace }}/ytlowcontrastmode.deb
-        key: ytlowcontrastmode-${{ inputs.ytlowcontrastmode_commit }}-sdk${{ inputs.sdk_version }}
+        key: ytlowcontrastmode-${{ inputs.ytlowcontrastmode_commit }}-sdk${{ inputs.sdk_version }}-${{ inputs.deps }}
 
     - uses: actions/cache@v6
       if: inputs.ythold == 'true' && inputs.ythold_commit != ''
       id: cache_ythold
       with:
         path: ${{ github.workspace }}/ythold.deb
-        key: ythold-${{ inputs.ythold_commit }}-sdk${{ inputs.sdk_version }}
+        key: ythold-${{ inputs.ythold_commit }}-sdk${{ inputs.sdk_version }}-${{ inputs.deps }}
 
     - uses: actions/cache@v6
       if: inputs.volumeboost == 'true' && inputs.volumeboost_commit != ''
       id: cache_volumeboost
       with:
         path: ${{ github.workspace }}/volumeboost.deb
-        key: volumeboost-${{ inputs.volumeboost_commit }}-arm64-sdk${{ inputs.sdk_version }}
+        key: volumeboost-${{ inputs.volumeboost_commit }}-arm64-sdk${{ inputs.sdk_version }}-${{ inputs.deps }}
 
     - uses: actions/cache@v6
       if: inputs.nativeshare == 'true' && inputs.nativeshare_commit != ''
       id: cache_nativeshare
       with:
         path: ${{ github.workspace }}/nativeshare.deb
-        key: nativeshare-${{ inputs.nativeshare_commit }}-sdk${{ inputs.sdk_version }}
+        key: nativeshare-${{ inputs.nativeshare_commit }}-sdk${{ inputs.sdk_version }}-${{ inputs.deps }}
 
     - uses: actions/cache@v6
       if: inputs.youfixplaybackissues_commit != ''
       id: cache_youfixplaybackissues
       with:
         path: ${{ github.workspace }}/youfixplaybackissues.deb
-        key: youfixplaybackissues-${{ inputs.youfixplaybackissues_commit }}-sdk${{ inputs.sdk_version }}
+        key: youfixplaybackissues-${{ inputs.youfixplaybackissues_commit }}-sdk${{ inputs.sdk_version }}-${{ inputs.deps }}
 
     - uses: actions/cache@v6
       if: inputs.pleasedontstopthemusic == 'true' && inputs.pleasedontstopthemusic_commit != ''
       id: cache_pleasedontstopthemusic
       with:
         path: ${{ github.workspace }}/pleasedontstopthemusic.deb
-        key: pleasedontstopthemusic-${{ inputs.pleasedontstopthemusic_commit }}-sdk${{ inputs.sdk_version }}
+        key: pleasedontstopthemusic-${{ inputs.pleasedontstopthemusic_commit }}-sdk${{ inputs.sdk_version }}-${{ inputs.deps }}

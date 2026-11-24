@@ -98,6 +98,9 @@ outputs:
   pleasedontstopthemusic:
     description: PleaseDontStopTheMusic commit hash
     value: ${{ steps.hashes.outputs.pleasedontstopthemusic }}
+  deps:
+    description: Short YouTubeHeader+PSHeader commits, appended to tweak cache keys
+    value: ${{ steps.hashes.outputs.deps }}
 
 runs:
   using: composite
@@ -115,6 +118,8 @@ runs:
         PLEASEDONTSTOPTHEMUSIC: ${{ inputs.pleasedontstopthemusic }}
       run: |
         export GIT_TERMINAL_PROMPT=0
+        out="$RUNNER_TEMP/hashes"
+        rm -rf "$out" && mkdir -p "$out"
 
         get_hash() {
           local name="$1" repo="$2" hash="" attempt
@@ -129,63 +134,48 @@ runs:
           if [ -z "$hash" ]; then
             echo "::warning title=Commit lookup failed::Could not resolve HEAD of ${repo}; its cache is skipped for this run"
           fi
-          echo "${name}=${hash}" >> "$GITHUB_OUTPUT"
+          printf '%s' "$hash" > "$out/$name"
         }
 
-        get_hash youpip               PoomSmart/YouPiP
-        get_hash ytuhd                Tonwalter888/YTUHD
-        get_hash ryd                  PoomSmart/Return-YouTube-Dislikes
-        get_hash ygs                  PoomSmart/YouGroupSettings
-        get_hash ytvo                 PoomSmart/YTVideoOverlay
-        get_hash ytabconfig           PoomSmart/YTABConfig
-        get_hash youquality           PoomSmart/YouQuality
-        get_hash youspeed             PoomSmart/YouSpeed
-        get_hash youmute              PoomSmart/YouMute
-        get_hash youloop              bhackel/YouLoop
-        get_hash youchoose            PoomSmart/YouChooseQuality
-        get_hash ytweaks              fosterbarnes/YTweaks
-        get_hash yougetcaption        PoomSmart/YouGetCaption
-        get_hash iamyoutube           PoomSmart/IAmYouTube
-        get_hash youfixplaybackissues mrdrvt99/YouFixPlaybackIssues
+        # optional tweaks: resolve only when enabled, else "disabled"
+        opt() {
+          if [ "$1" = "true" ]; then get_hash "$2" "$3"; else printf 'disabled' > "$out/$2"; fi
+        }
 
-        if [ "$ISPONSORBLOCK" = "true" ]; then
-          get_hash isponsorblock Galactic-Dev/iSponsorBlock
-        else
-          echo "isponsorblock=disabled" >> "$GITHUB_OUTPUT"
-        fi
+        get_hash youpip               PoomSmart/YouPiP &
+        get_hash ytuhd                Tonwalter888/YTUHD &
+        get_hash ryd                  PoomSmart/Return-YouTube-Dislikes &
+        get_hash ygs                  PoomSmart/YouGroupSettings &
+        get_hash ytvo                 PoomSmart/YTVideoOverlay &
+        get_hash ytabconfig           PoomSmart/YTABConfig &
+        get_hash youquality           PoomSmart/YouQuality &
+        get_hash youspeed             PoomSmart/YouSpeed &
+        get_hash youmute              PoomSmart/YouMute &
+        get_hash youloop              bhackel/YouLoop &
+        get_hash youchoose            PoomSmart/YouChooseQuality &
+        get_hash ytweaks              fosterbarnes/YTweaks &
+        get_hash yougetcaption        PoomSmart/YouGetCaption &
+        get_hash iamyoutube           PoomSmart/IAmYouTube &
+        get_hash youfixplaybackissues mrdrvt99/YouFixPlaybackIssues &
+        get_hash ytheader             PoomSmart/YouTubeHeader &
+        get_hash psheader             PoomSmart/PSHeader &
+        opt "$ISPONSORBLOCK"          isponsorblock          Galactic-Dev/iSponsorBlock &
+        opt "$DEMC"                   demc                   therealFoxster/DontEatMyContent &
+        opt "$YTLOWCONTRASTMODE"      ytlowcontrastmode      Mark02-2012/YTLowContrastMode &
+        opt "$YTHOLD"                 ythold                 joshuaseltzer/YTHoldForSpeed &
+        opt "$VOLUMEBOOST"            volumeboost            mrdrvt99/VolumeBoostYT &
+        opt "$NATIVESHARE"            nativeshare            jkhsjdhjs/youtube-native-share &
+        opt "$PLEASEDONTSTOPTHEMUSIC" pleasedontstopthemusic mikey820/PleaseDontStopTheMusic &
+        wait
 
-        if [ "$DEMC" = "true" ]; then
-          get_hash demc therealFoxster/DontEatMyContent
-        else
-          echo "demc=disabled" >> "$GITHUB_OUTPUT"
-        fi
+        for f in "$out"/*; do
+          echo "$(basename "$f")=$(cat "$f")" >> "$GITHUB_OUTPUT"
+        done
 
-        if [ "$YTLOWCONTRASTMODE" = "true" ]; then
-          get_hash ytlowcontrastmode Mark02-2012/YTLowContrastMode
+        # If a header lookup failed, use the run id so tweaks rebuild instead of reusing a stale cache.
+        yth="$(cat "$out/ytheader")"; psh="$(cat "$out/psheader")"
+        if [ -n "$yth" ] && [ -n "$psh" ]; then
+          echo "deps=${yth:0:10}${psh:0:10}" >> "$GITHUB_OUTPUT"
         else
-          echo "ytlowcontrastmode=disabled" >> "$GITHUB_OUTPUT"
-        fi
-
-        if [ "$YTHOLD" = "true" ]; then
-          get_hash ythold joshuaseltzer/YTHoldForSpeed
-        else
-          echo "ythold=disabled" >> "$GITHUB_OUTPUT"
-        fi
-
-        if [ "$VOLUMEBOOST" = "true" ]; then
-          get_hash volumeboost mrdrvt99/VolumeBoostYT
-        else
-          echo "volumeboost=disabled" >> "$GITHUB_OUTPUT"
-        fi
-
-        if [ "$NATIVESHARE" = "true" ]; then
-          get_hash nativeshare jkhsjdhjs/youtube-native-share
-        else
-          echo "nativeshare=disabled" >> "$GITHUB_OUTPUT"
-        fi
-
-        if [ "$PLEASEDONTSTOPTHEMUSIC" = "true" ]; then
-          get_hash pleasedontstopthemusic mikey820/PleaseDontStopTheMusic
-        else
-          echo "pleasedontstopthemusic=disabled" >> "$GITHUB_OUTPUT"
+          echo "deps=run${GITHUB_RUN_ID}" >> "$GITHUB_OUTPUT"
         fi

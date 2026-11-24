@@ -1,0 +1,193 @@
+name: Package
+
+on:
+  workflow_call:
+    inputs:
+      ipa_url:
+        type: string
+        required: true
+      display_name:
+        type: string
+        required: true
+      bundle_id:
+        type: string
+        required: true
+      opensafari:
+        type: boolean
+        required: false
+        default: false
+      main:
+        description: "Main tweak: youpro, ytlite, ytkace, youmod, custom, or none"
+        type: string
+        required: true
+      deb_url:
+        description: "custom only: URL to the .deb"
+        type: string
+        required: false
+        default: ''
+      ipa_prefix:
+        description: "IPA file name prefix (custom: user-supplied, sanitized here)"
+        type: string
+        required: true
+      release_prefix:
+        description: "Draft release tag prefix, e.g. ytl-ipa"
+        type: string
+        required: true
+      title:
+        type: string
+        required: true
+
+jobs:
+  package:
+    name: ${{ inputs.title }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    env:
+      # pinned; cyan ships its own Linux ldid/insert_dylib, so no macOS runner is needed here
+      CYAN_URL: https://github.com/asdfzxcvbn/pyzule-rw/archive/740d3716dcd98c20c000f12cdb88f1f0b2a533a4.zip
+    steps:
+      - name: Hide Sensitive Inputs
+        uses: levibostian/action-hide-sensitive-inputs@v1
+        with:
+          exclude_inputs: bundle_id,display_name,custom_name,demc,ytlowcontrastmode,isponsorblock,ythold,volumeboost,nativeshare,opensafari,youpip,ytuhd,ryd,ytabconfig,youquality,ytweaks,youchoose,yougetcaption,youspeed,youmute,youloop,pleasedontstopthemusic
+
+      - name: Download Built Debs
+        uses: actions/download-artifact@v8
+        with:
+          name: built-debs
+          path: ${{ github.workspace }}
+
+      - name: Download and Validate IPA
+        env:
+          IPA_URL: ${{ inputs.ipa_url }}
+        run: |
+          download() {
+            rm -f "$2"
+            if wget --quiet --no-verbose --tries=3 --waitretry=2 -O "$2" "$1"; then
+              return 0
+            fi
+            echo "::warning::wget failed for $2, retrying with curl"
+            rm -f "$2"
+            curl --fail --location --silent --show-error --retry 3 --retry-delay 2 -o "$2" "$1"
+          }
+          download "$IPA_URL" youtube.ipa
+          file_type=$(file --mime-type -b youtube.ipa)
+          if [[ "$file_type" != "application/x-ios-app" && "$file_type" != "application/zip" ]]; then
+            echo "::error::Validation failed: The downloaded file is not a valid IPA. Detected type: $file_type."
+            exit 1
+          fi
+
+      - name: Get YouTube Version
+        run: |
+          plist_dir="$RUNNER_TEMP/ytplist"
+          mkdir -p "$plist_dir"
+          unzip -q -j -o youtube.ipa "Payload/YouTube.app/Info.plist" -d "$plist_dir"
+          yt_version="$(python3 -c 'import plistlib,sys; print(plistlib.load(open(sys.argv[1],"rb")).get("CFBundleVersion",""))' "$plist_dir/Info.plist" | tr -d '\r\n' | tr -c 'A-Za-z0-9._+~-' '_')"
+          rm -rf "$plist_dir"
+          if [ -z "$yt_version" ]; then
+            echo "::error::Could not read CFBundleVersion from the IPA's Info.plist"
+            exit 1
+          fi
+          echo "YT_VERSION=$yt_version" >> "$GITHUB_ENV"
+
+      # YouPro and YTLite are prebuilt trees: plain dpkg-deb, no Theos needed.
+      - name: Get Main Tweak
+        env:
+          MAIN: ${{ inputs.main }}
+          DEB_URL: ${{ inputs.deb_url }}
+        run: |
+          pack() {
+            git clone --quiet --depth=1 "https://github.com/$1.git" _main_src
+            chmod -R 755 _main_src
+            (cd _main_src && dpkg-deb --root-owner-group -Zgzip --build . "../$2")
+            rm -rf _main_src
+          }
+          case "$MAIN" in
+            youpro) pack mrdrvt99/YouPro YouPro.deb; deb=YouPro.deb ;;
+            ytlite) pack mrdrvt99/YTL ytlite.deb;    deb=ytlite.deb ;;
+            ytkace) deb=ytkace.deb ;;
+            youmod) deb=youmod.deb ;;
+            custom)
+              deb=$(basename "$DEB_URL" | cut -d'?' -f1)
+              [[ "$deb" == *.deb ]] || deb="${deb}.deb"
+              rm -f "$deb"
+              if ! wget --quiet --no-verbose --tries=3 --waitretry=2 -O "$deb" "$DEB_URL"; then
+                echo "::warning::wget failed for $deb, retrying with curl"
+                rm -f "$deb"
+                curl --fail --location --silent --show-error --retry 3 --retry-delay 2 -o "$deb" "$DEB_URL"
+              fi
+              deb_type=$(file --mime-type -b "$deb")
+              if [[ "$deb_type" != "application/vnd.debian.binary-package" ]]; then
+                echo "::error::Validation failed: The downloaded file is not a valid .deb. Detected type: $deb_type."
+                exit 1
+              fi
+              ;;
+            none) exit 0 ;;
+            *) echo "::error::Unknown main tweak: $MAIN"; exit 1 ;;
+          esac
+          test -f "$deb" || { echo "::error::$deb was not produced"; exit 1; }
+
+          version=$(dpkg-deb --field "$deb" Version | tr -d '\r\n' | tr -c 'A-Za-z0-9._+~-' '_')
+          if [ -z "$version" ]; then
+            echo "::error::Could not extract version from $deb"
+            exit 1
+          fi
+          echo "MAIN_VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Install cyan
+        run: pipx install --force "$CYAN_URL"
+
+      - name: Inject Tweaks Into IPA
+        env:
+          OPENSAFARI: ${{ inputs.opensafari }}
+          DISPLAY_NAME: ${{ inputs.display_name }}
+          BUNDLE_ID: ${{ inputs.bundle_id }}
+          IPA_PREFIX: ${{ inputs.ipa_prefix }}
+        run: |
+          prefix=$(printf '%s' "$IPA_PREFIX" | tr ' ' '_' | tr -cd '[:alnum:]_.-')
+          [ -n "$prefix" ] || prefix=YouProExtra
+          tweaks=()
+          if [ "$OPENSAFARI" = "true" ] && [ -e "OpenYouTubeSafariExtension.appex" ]; then
+            tweaks+=("OpenYouTubeSafariExtension.appex")
+          fi
+          for f in *.deb; do
+            if [ -f "$f" ]; then
+              tweaks+=("$f")
+            fi
+          done
+          ipa_name="${prefix}_${YT_VERSION}${MAIN_VERSION:+_$MAIN_VERSION}.ipa"
+          cyan -i youtube.ipa -o "$ipa_name" -uwesf "${tweaks[@]}" -n "$DISPLAY_NAME" -b "$BUNDLE_ID"
+          echo "IPA_NAME=$ipa_name" >> "$GITHUB_ENV"
+
+      - name: Create a Draft Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREFIX: ${{ inputs.release_prefix }}
+        run: |
+          # one API call instead of probing tags one by one
+          last=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 1000 --json tagName --jq '.[].tagName' \
+            | sed -n "s/^${PREFIX}\([0-9][0-9]*\)$/\1/p" | sort -n | tail -1)
+          tag="${PREFIX}$(( ${last:-0} + 1 ))"
+          gh release create "$tag" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "${IPA_NAME%.ipa}" \
+            --draft \
+            "$IPA_NAME"
+
+      - name: Job Summary
+        env:
+          TITLE: ${{ inputs.title }}
+        run: |
+          {
+            echo "### 🛠️ ${TITLE} Complete!"
+            echo
+            echo '### 🚀 Draft Release'
+            echo
+            echo "Draft release has been created successfully! You can view your release here: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases"
+            echo
+            echo '### 🧹 Cleanup'
+            echo
+            echo "You can remove previous GitHub Actions run here: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/workflows/delete-old-workflows-run.yml And if you want to delete old draft releases you have then here: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/workflows/delete-old-draft-releases.yml"
+          } >> "$GITHUB_STEP_SUMMARY"

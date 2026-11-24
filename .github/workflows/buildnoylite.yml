@@ -138,17 +138,12 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   build-tweaks:
     permissions:
       contents: read
     uses: ./.github/workflows/_build_tweaks.yml
     with:
-      youpro: false
       isponsorblock: ${{ inputs.isponsorblock }}
       demc: ${{ inputs.demc }}
       ytlowcontrastmode: ${{ inputs.ytlowcontrastmode }}
@@ -170,106 +165,16 @@ jobs:
       pleasedontstopthemusic: ${{ inputs.pleasedontstopthemusic }}
 
   package:
-    name: Build IPA
-    runs-on: xcode-27
-    timeout-minutes: 30
     needs: build-tweaks
     permissions:
       contents: write
-    env:
-      HOMEBREW_NO_ENV_HINTS: 1
-    steps:
-      - name: Hide Sensitive Inputs
-        uses: levibostian/action-hide-sensitive-inputs@v1
-        with:
-          exclude_inputs: bundle_id,display_name,demc,ytlowcontrastmode,isponsorblock,ythold,volumeboost,nativeshare,opensafari,youpip,ytuhd,ryd,ytabconfig,youquality,ytweaks,youchoose,yougetcaption,youspeed,youmute,youloop,pleasedontstopthemusic
-
-      - name: Download Built Debs
-        uses: actions/download-artifact@v8
-        with:
-          name: built-debs
-          path: ${{ github.workspace }}
-
-      - name: Download and Validate IPA
-        env:
-          IPA_URL: ${{ inputs.ipa_url }}
-        run: |
-          download() {
-            rm -f "$2"
-            if wget --quiet --no-verbose --tries=3 --waitretry=2 -O "$2" "$1"; then
-              return 0
-            fi
-            echo "::warning::wget failed for $2, retrying with curl"
-            rm -f "$2"
-            curl --fail --location --silent --show-error --retry 3 --retry-delay 2 -o "$2" "$1"
-          }
-          download "$IPA_URL" youtube.ipa
-          file_type=$(file --mime-type -b youtube.ipa)
-          if [[ "$file_type" != "application/x-ios-app" && "$file_type" != "application/zip" ]]; then
-            echo "::error::Validation failed: The downloaded file is not a valid IPA. Detected type: $file_type."
-            exit 1
-          fi
-
-      - name: Get YouTube Version
-        run: |
-          plist_dir="$RUNNER_TEMP/ytplist"
-          mkdir -p "$plist_dir"
-          unzip -q -j -o youtube.ipa "Payload/YouTube.app/Info.plist" -d "$plist_dir"
-          yt_version="$(plutil -extract CFBundleVersion raw -o - "$plist_dir/Info.plist" | tr -d '\r\n' | tr -c 'A-Za-z0-9._+~-' '_')"
-          rm -rf "$plist_dir"
-          if [ -z "$yt_version" ]; then
-            echo "::error::Could not read CFBundleVersion from the IPA's Info.plist"
-            exit 1
-          fi
-          echo "YT_VERSION=$yt_version" >> "$GITHUB_ENV"
-
-      - name: Install cyan
-        run: |
-          pipx install --force https://github.com/asdfzxcvbn/pyzule-rw/archive/main.zip
-
-      - name: Inject Tweaks Into IPA
-        env:
-          OPENSAFARI: ${{ inputs.opensafari }}
-          DISPLAY_NAME: ${{ inputs.display_name }}
-          BUNDLE_ID: ${{ inputs.bundle_id }}
-        run: |
-          tweaks=()
-          if [ "$OPENSAFARI" = "true" ] && [ -e "OpenYouTubeSafariExtension.appex" ]; then
-            tweaks+=("OpenYouTubeSafariExtension.appex")
-          fi
-          for f in *.deb; do
-            if [ -f "$f" ]; then
-              tweaks+=("$f")
-            fi
-          done
-          ipa_name="YouProExtra_IPA_${YT_VERSION}.ipa"
-          cyan -i youtube.ipa -o "$ipa_name" -uwesf "${tweaks[@]}" -n "$DISPLAY_NAME" -b "$BUNDLE_ID"
-          echo "IPA_NAME=$ipa_name" >> "$GITHUB_ENV"
-
-      - name: Create a Draft Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          i=1
-          while gh release view "youproextra-noytlite-ipa${i}" --repo "$GITHUB_REPOSITORY" &>/dev/null; do
-            i=$(( i + 1 ))
-          done
-          gh release create "youproextra-noytlite-ipa${i}" \
-            --repo "$GITHUB_REPOSITORY" \
-            --title "${IPA_NAME%.ipa}" \
-            --draft \
-            "$IPA_NAME"
-
-      - name: Job Summary
-        run: |
-          {
-            echo '### 🛠️ Build IPA Complete!'
-            echo
-            echo '### 🚀 Draft Release'
-            echo
-            echo "Draft release has been created successfully! You can view your release here: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases"
-            echo
-            echo '### 🧹 Cleanup'
-            echo
-            echo "You can remove previous GitHub Actions run here: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/workflows/delete-old-workflows-run.yml And if you want to delete old draft releases you have then here: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/workflows/delete-old-draft-releases.yml"
-          } >> "$GITHUB_STEP_SUMMARY"
+    uses: ./.github/workflows/_package.yml
+    with:
+      ipa_url: ${{ inputs.ipa_url }}
+      display_name: ${{ inputs.display_name }}
+      bundle_id: ${{ inputs.bundle_id }}
+      opensafari: ${{ inputs.opensafari }}
+      main: none
+      ipa_prefix: YouProExtra_IPA
+      release_prefix: youproextra-noytlite-ipa
+      title: "Build IPA"
